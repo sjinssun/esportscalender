@@ -11,3 +11,4 @@ public class EsportscalendarApplication {
 	}
 
 }
+//.run 하면 내부적으로 applicationcontext 생성, @repository, @controller, @service 등을 Bean으로 등록함
