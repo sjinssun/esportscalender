@@ -15,16 +15,20 @@ public class MatchScheduleCrawler {
         this.matchScheduleService = matchScheduleService;
     }
 
-    // 매일 새벽 4시에 자동 실행
+    /**
+     * 매일 새벽 4시에 자동 실행
+     * cron 형식: 초 분 시 일 월 요일
+     */
     @Scheduled(cron = "0 0 4 * * *")
     public void autoCrawlLckSchedules() {
-        try {
-            String today = LocalDate.now().toString();
-            String weekLater = LocalDate.now().plusDays(7).toString();
+        String today = LocalDate.now().toString();
+        String weekLater = LocalDate.now().plusDays(7).toString();
 
-            matchScheduleService.crawlAndSaveLckSchedule(today, weekLater);
-            System.out.println("✅ 자동 크롤링 완료: " + today + " ~ " + weekLater);
+        try {
+            int savedCount = matchScheduleService.crawlAndSaveLckSchedule(today, weekLater);
+            System.out.printf("✅ 자동 크롤링 완료: %s ~ %s (저장 %d건)%n", today, weekLater, savedCount);
         } catch (Exception e) {
+            System.err.printf("❌ 자동 크롤링 실패: %s ~ %s%n", today, weekLater);
             e.printStackTrace();
         }
     }
