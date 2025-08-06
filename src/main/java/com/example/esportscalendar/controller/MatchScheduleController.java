@@ -2,9 +2,11 @@ package com.example.esportscalendar.controller;
 
 import com.example.esportscalendar.service.MatchScheduleService;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@RequestMapping("/api/schedules")
 public class MatchScheduleController {
 
     private final MatchScheduleService matchScheduleService;
@@ -14,7 +16,7 @@ public class MatchScheduleController {
         this.matchScheduleService = matchScheduleService;
     }
 
-    @GetMapping("/schedules/crawl")
+    @GetMapping("/crawl")
     public String crawlLckSchedules() {
         try {
             // 원하는 날짜 범위 설정
