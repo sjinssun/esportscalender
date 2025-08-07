@@ -12,12 +12,12 @@ public class WebConfig {
         return new WebMvcConfigurer() {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
-                registry.addMapping("/*") // 모든 경로 허용
+                registry.addMapping("/**") // 모든 경로 허용
                         .allowedOrigins(
-                                "https://esports-cyan.vercel.app/"  // https:// 추가
+                                "https://esports-cyan.vercel.app"  // https:// 추가
                         )
                         .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                        .allowedHeaders("")  // 모든 헤더 허용
+                        .allowedHeaders("*")  // 모든 헤더 허용
                         .allowCredentials(true);
             }
         };
