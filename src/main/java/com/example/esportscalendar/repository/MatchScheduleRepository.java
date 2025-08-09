@@ -23,4 +23,7 @@ public interface MatchScheduleRepository extends JpaRepository<MatchSchedule, Lo
 
     Page<MatchSchedule> findByTeamAIgnoreCaseOrTeamBIgnoreCaseAndMatchDateBetween(
             String teamA, String teamB, LocalDateTime from, LocalDateTime to, Pageable pageable);
+
+    boolean existsByTeamAIgnoreCaseAndTeamBIgnoreCaseAndMatchDate(String teamA, String teamB, LocalDateTime matchDate);
 }
+
