@@ -1,9 +1,13 @@
 package com.example.esportscalendar.controller;
 
+import com.example.esportscalendar.domain.MatchSchedule;
 import com.example.esportscalendar.service.MatchScheduleService;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/schedules")
@@ -11,20 +15,86 @@ public class MatchScheduleController {
 
     private final MatchScheduleService matchScheduleService;
 
-    // Lombok 없이 직접 생성자 작성
     public MatchScheduleController(MatchScheduleService matchScheduleService) {
         this.matchScheduleService = matchScheduleService;
     }
 
-    @GetMapping("/crawl")
-    public String crawlLckSchedules() {
+    // =====================
+    // 1) 수동 크롤링 실행
+    // =====================
+    @PostMapping("/crawl")
+    public String crawlLckSchedules(
+            @RequestParam String startDate, // yyyy-MM-dd
+            @RequestParam String endDate    // yyyy-MM-dd
+    ) {
         try {
-            // 원하는 날짜 범위 설정
-            matchScheduleService.crawlAndSaveLckSchedule("2025-07-28", "2025-08-03");
-            return "크롤링 완료!";
+            int saved = matchScheduleService.crawlAndSaveLckSchedule(startDate, endDate);
+            return "크롤링 완료! saved=" + saved;
         } catch (Exception e) {
             e.printStackTrace();
             return "크롤링 실패: " + e.getMessage();
         }
     }
+
+    // =====================
+    // 2) 전체 또는 기간 조회
+    // =====================
+    @GetMapping
+    public List<MatchSchedule> list(
+            @RequestParam(required = false) String from, // yyyy-MM-dd or yyyy-MM-dd'T'HH:mm
+            @RequestParam(required = false) String to
+    ) {
+        LocalDateTime fromDt = parseDateTime(from);
+        LocalDateTime toDt   = parseDateTime(to);
+        if (fromDt == null && toDt == null) {
+            return matchScheduleService.findAll();
+        }
+        if (fromDt == null) fromDt = LocalDateTime.now().minusYears(10);
+        if (toDt == null)   toDt   = LocalDateTime.now().plusYears(10);
+        return matchScheduleService.findByDateRange(fromDt, toDt);
+    }
+
+    // =====================
+    // 3) 팀명으로 조회
+    // =====================
+    @GetMapping("/team/{team}")
+    public List<MatchSchedule> byTeam(@PathVariable String team) {
+        return matchScheduleService.findByTeam(team);
+    }
+
+    // =====================
+    // 4) 다가오는 경기 N건
+    // =====================
+    @GetMapping("/upcoming")
+    public List<MatchSchedule> upcoming(@RequestParam(defaultValue = "5") int n) {
+        return matchScheduleService.findUpcoming(n);
+    }
+
+    // =====================
+    // 5) 점검용
+    // =====================
+    @GetMapping("/_count")
+    public long count() {
+        return matchScheduleService.countAll();
+    }
+
+    @GetMapping("/_sample")
+    public List<MatchSchedule> sample(@RequestParam(defaultValue = "5") int n) {
+        return matchScheduleService.findLatest(n);
+    }
+
+    // =====================
+    // 내부 유틸
+    // =====================
+    private static final DateTimeFormatter ISO_M = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm");
+    private static final DateTimeFormatter ISO_D = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    private LocalDateTime parseDateTime(String v) {
+        if (v == null || v.isBlank()) return null;
+        try { return LocalDateTime.parse(v, ISO_M); } catch (Exception ignore) {}
+        try { return LocalDate.parse(v, ISO_D).atStartOfDay(); } catch (Exception ignore) {}
+
+        return null;
+    }
 }
+
