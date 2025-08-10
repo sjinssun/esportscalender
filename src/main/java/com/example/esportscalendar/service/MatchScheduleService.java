@@ -236,7 +236,25 @@ public class MatchScheduleService {
                         team, team, PageRequest.of(0, Integer.MAX_VALUE, Sort.by("matchDate").ascending()))
                 .getContent();
     }
+    // MatchScheduleService.java
+    public int crawlSeason(int year) throws Exception {
+        WebClient naverClient = this.defaultClient.mutate()
+                .defaultHeader("User-Agent", "Mozilla/5.0")
+                .defaultHeader("Referer", "https://sports.naver.com/esports/schedule/League_of_Legends")
+                .build();
 
+        YearMonth cur = YearMonth.of(year, 1);
+        YearMonth last = YearMonth.of(year, 12);
+
+        int totalSaved = 0;
+        while (!cur.isAfter(last)) {
+            totalSaved += fetchMonthAndSaveFromNaver(naverClient, cur);
+            try { Thread.sleep(150L); } catch (InterruptedException ignore) {}
+            cur = cur.plusMonths(1);
+        }
+        System.out.println("[NAVER DONE] YEAR=" + year + " saved=" + totalSaved);
+        return totalSaved;
+    }
     // ===========================
     // 유틸
     // ===========================

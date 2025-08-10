@@ -22,8 +22,8 @@ public class MatchScheduleController {
     }
 
     // =====================
-    // 1) 수동 크롤링 실행 (네이버 month API 사용)
-    //    - 날짜 미지정이면 기본: 이번달 ~ 다음달
+    // 1) 수동 크롤링 (임의 기간)
+    //    - 미지정 시: 이번달 1일 ~ 다음달 말
     // =====================
     @PostMapping("/crawl")
     public String crawlLckSchedules(
@@ -41,6 +41,21 @@ public class MatchScheduleController {
         } catch (Exception e) {
             e.printStackTrace();
             return "크롤링 실패: " + e.getMessage();
+        }
+    }
+
+    // =====================
+    // 1-1) 연도 전체 시즌 크롤 (1~12월)
+    //     - 예) POST /api/schedules/crawl/season?year=2025
+    // =====================
+    @PostMapping("/crawl/season")
+    public String crawlSeason(@RequestParam int year) {
+        try {
+            int saved = matchScheduleService.crawlSeason(year);
+            return "시즌 크롤 완료! year=" + year + ", saved=" + saved;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "시즌 크롤 실패: " + e.getMessage();
         }
     }
 
