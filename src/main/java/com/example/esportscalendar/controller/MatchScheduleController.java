@@ -2,10 +2,12 @@ package com.example.esportscalendar.controller;
 
 import com.example.esportscalendar.domain.MatchSchedule;
 import com.example.esportscalendar.service.MatchScheduleService;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
@@ -20,16 +22,22 @@ public class MatchScheduleController {
     }
 
     // =====================
-    // 1) 수동 크롤링 실행
+    // 1) 수동 크롤링 실행 (네이버 month API 사용)
+    //    - 날짜 미지정이면 기본: 이번달 ~ 다음달
     // =====================
     @PostMapping("/crawl")
     public String crawlLckSchedules(
-            @RequestParam String startDate, // yyyy-MM-dd
-            @RequestParam String endDate    // yyyy-MM-dd
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
     ) {
         try {
-            int saved = matchScheduleService.crawlAndSaveLckSchedule(startDate, endDate);
-            return "크롤링 완료! saved=" + saved;
+            LocalDate s = (startDate != null) ? startDate : YearMonth.now().atDay(1);
+            LocalDate e = (endDate   != null) ? endDate   : YearMonth.now().plusMonths(1).atEndOfMonth();
+
+            int saved = matchScheduleService.crawlAndSaveLckSchedule(s.toString(), e.toString());
+            return "크롤링 완료! saved=" + saved + " (" + s + " ~ " + e + ")";
         } catch (Exception e) {
             e.printStackTrace();
             return "크롤링 실패: " + e.getMessage();
@@ -93,8 +101,6 @@ public class MatchScheduleController {
         if (v == null || v.isBlank()) return null;
         try { return LocalDateTime.parse(v, ISO_M); } catch (Exception ignore) {}
         try { return LocalDate.parse(v, ISO_D).atStartOfDay(); } catch (Exception ignore) {}
-
         return null;
     }
 }
-
