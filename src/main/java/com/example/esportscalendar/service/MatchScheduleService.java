@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
-import org.apache.catalina.CredentialHandler;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
@@ -236,7 +235,8 @@ public class MatchScheduleService {
                         team, team, PageRequest.of(0, Integer.MAX_VALUE, Sort.by("matchDate").ascending()))
                 .getContent();
     }
-    // MatchScheduleService.java
+
+    // 연도 전체 시즌 크롤
     public int crawlSeason(int year) throws Exception {
         WebClient naverClient = this.defaultClient.mutate()
                 .defaultHeader("User-Agent", "Mozilla/5.0")
@@ -255,6 +255,7 @@ public class MatchScheduleService {
         System.out.println("[NAVER DONE] YEAR=" + year + " saved=" + totalSaved);
         return totalSaved;
     }
+
     // ===========================
     // 유틸
     // ===========================
@@ -280,23 +281,47 @@ public class MatchScheduleService {
     }
 
     /**
-     * KST로 LocalDateTime 파싱
-     * - ISO(…T…+09:00) 형식이면 그대로 Instant→KST
-     * - 아니면 date("yyyy-MM-dd") + time("HH:mm") 결합
+     * KST로 LocalDateTime 파싱 (강화 버전)
+     * - 오프셋/타임존 포함 ISO(…+09:00, …Z) 우선 처리
+     * - 오프셋 없는 ISO(LocalDateTime) 처리
+     * - HH:mm / HH:mm:ss 만 오는 경우 date와 결합
      */
     private static LocalDateTime parseKst(String dateOrNull, String isoOrTime) {
-        if (isoOrTime != null && isoOrTime.contains("T")) {
+        if (isoOrTime == null || isoOrTime.isBlank()) return null;
+
+        String s = isoOrTime.trim().replace(" ", "T");
+
+        // 1) Offset 포함 (예: 2025-08-15T17:00:00+09:00, 2025-08-15T08:00:00Z)
+        try {
+            return OffsetDateTime.parse(s)
+                    .atZoneSameInstant(ZoneId.of("Asia/Seoul"))
+                    .toLocalDateTime();
+        } catch (Exception ignore) {}
+
+        // 2) Zone 포함 (예: 2025-08-15T17:00:00+09:00[Asia/Seoul])
+        try {
+            return ZonedDateTime.parse(s)
+                    .withZoneSameInstant(ZoneId.of("Asia/Seoul"))
+                    .toLocalDateTime();
+        } catch (Exception ignore) {}
+
+        // 3) 오프셋 없는 LocalDateTime (예: 2025-08-15T17:00, 2025-08-15T17:00:00)
+        try {
+            return LocalDateTime.parse(s).atZone(ZoneId.of("Asia/Seoul")).toLocalDateTime();
+        } catch (Exception ignore) {}
+
+        // 4) 시각만 온 경우 (예: 17:00, 17:00:00)
+        if (dateOrNull != null) {
             try {
-                Instant inst = Instant.parse(isoOrTime.replace(" ", "T"));
-                return LocalDateTime.ofInstant(inst, ZoneId.of("Asia/Seoul"));
+                DateTimeFormatter f1 = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+                return LocalDateTime.parse(dateOrNull + " " + isoOrTime, f1);
+            } catch (Exception ignore) {}
+            try {
+                DateTimeFormatter f2 = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+                return LocalDateTime.parse(dateOrNull + " " + isoOrTime, f2);
             } catch (Exception ignore) {}
         }
-        if (dateOrNull == null || isoOrTime == null) return null;
-        DateTimeFormatter f = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-        try {
-            return LocalDateTime.parse(dateOrNull + " " + isoOrTime, f);
-        } catch (Exception e) {
-            return null;
-        }
+
+        return null; // 최종 실패
     }
 }
