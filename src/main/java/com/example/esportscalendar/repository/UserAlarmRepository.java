@@ -1,21 +1,15 @@
 package com.example.esportscalendar.repository;
 
 import com.example.esportscalendar.domain.UserAlarm;
-import com.example.esportscalendar.domain.User;
-import com.example.esportscalendar.domain.MatchSchedule;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
-import java.util.Optional;
 
 public interface UserAlarmRepository extends JpaRepository<UserAlarm, Long> {
 
-    // 특정 유저가 특정 경기 알람 설정했는지 확인
-    Optional<UserAlarm> findByUserAndMatch(User user, MatchSchedule match);
+    // 활성화된 구독만 가져오기
+    List<UserAlarm> findByActiveTrue();
 
-    // 유저가 설정한 전체 알람 목록
-    List<UserAlarm> findByUser(User user);
-
-    // 특정 경기 알람 설정한 유저들
-    List<UserAlarm> findByMatch(MatchSchedule match);
+    // 특정 유저 + 활성화된 구독 조회 (로그인 기능 붙였을 때 활용)
+    List<UserAlarm> findByUser_IdAndActiveTrue(Long userId);
 }
