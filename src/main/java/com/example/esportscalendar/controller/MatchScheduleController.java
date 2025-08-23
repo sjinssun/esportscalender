@@ -3,6 +3,7 @@ package com.example.esportscalendar.controller;
 import com.example.esportscalendar.domain.MatchSchedule;
 import com.example.esportscalendar.service.MatchScheduleService;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -23,10 +24,10 @@ public class MatchScheduleController {
 
     // =====================
     // 1) 수동 크롤링 (임의 기간)
-    //    - 미지정 시: 이번달 1일 ~ 다음달 말
+    //    미지정 시: 이번달 1일 ~ 다음달 말
     // =====================
     @PostMapping("/crawl")
-    public String crawlLckSchedules(
+    public ResponseEntity<String> crawlLckSchedules(
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false)
@@ -37,48 +38,49 @@ public class MatchScheduleController {
             LocalDate e = (endDate   != null) ? endDate   : YearMonth.now().plusMonths(1).atEndOfMonth();
 
             int saved = matchScheduleService.crawlAndSaveLckSchedule(s.toString(), e.toString());
-            return "크롤링 완료! saved=" + saved + " (" + s + " ~ " + e + ")";
+            return ResponseEntity.ok("크롤링 완료! saved=" + saved + " (" + s + " ~ " + e + ")");
         } catch (Exception e) {
-            e.printStackTrace();
-            return "크롤링 실패: " + e.getMessage();
+            return ResponseEntity.badRequest().body("크롤링 실패: " + e.getMessage());
         }
     }
 
     // =====================
     // 1-1) 연도 전체 시즌 크롤 (1~12월)
-    //     - 예) POST /api/schedules/crawl/season?year=2025
+    // 예) POST /api/schedules/crawl/season?year=2025
     // =====================
     @PostMapping("/crawl/season")
-    public String crawlSeason(@RequestParam int year) {
+    public ResponseEntity<String> crawlSeason(@RequestParam int year) {
         try {
             int saved = matchScheduleService.crawlSeason(year);
-            return "시즌 크롤 완료! year=" + year + ", saved=" + saved;
+            return ResponseEntity.ok("시즌 크롤 완료! year=" + year + ", saved=" + saved);
         } catch (Exception e) {
-            e.printStackTrace();
-            return "시즌 크롤 실패: " + e.getMessage();
+            return ResponseEntity.badRequest().body("시즌 크롤 실패: " + e.getMessage());
         }
     }
 
     // =====================
     // 2) 전체 또는 기간 조회
+    //    - from/to 모두 없으면 전체
+    //    - ISO: yyyy-MM-dd 또는 yyyy-MM-dd'T'HH:mm
     // =====================
     @GetMapping
     public List<MatchSchedule> list(
-            @RequestParam(required = false) String from, // yyyy-MM-dd or yyyy-MM-dd'T'HH:mm
+            @RequestParam(required = false) String from,
             @RequestParam(required = false) String to
     ) {
         LocalDateTime fromDt = parseDateTime(from);
         LocalDateTime toDt   = parseDateTime(to);
         if (fromDt == null && toDt == null) {
+            // 기본은 최신순 N건이 더 안전하지만, 기존 동작 유지: 전체
             return matchScheduleService.findAll();
         }
         if (fromDt == null) fromDt = LocalDateTime.now().minusYears(10);
-        if (toDt == null)   toDt   = LocalDateTime.now().plusYears(10);
+        if (toDt   == null) toDt   = LocalDateTime.now().plusYears(10);
         return matchScheduleService.findByDateRange(fromDt, toDt);
     }
 
     // =====================
-    // 3) 팀명으로 조회
+    // 3) 팀명으로 조회 (과거~미래 전부; 서비스에서 오름차순 정렬)
     // =====================
     @GetMapping("/team/{team}")
     public List<MatchSchedule> byTeam(@PathVariable String team) {
@@ -86,7 +88,7 @@ public class MatchScheduleController {
     }
 
     // =====================
-    // 4) 다가오는 경기 N건
+    // 4) 다가오는 경기 N건 (기본 5)
     // =====================
     @GetMapping("/upcoming")
     public List<MatchSchedule> upcoming(@RequestParam(defaultValue = "5") int n) {
@@ -94,7 +96,7 @@ public class MatchScheduleController {
     }
 
     // =====================
-    // 5) 점검용
+    // 5) 점검용 (원하면 제거 가능)
     // =====================
     @GetMapping("/_count")
     public long count() {
@@ -119,5 +121,3 @@ public class MatchScheduleController {
         return null;
     }
 }
-
-

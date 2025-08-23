@@ -14,9 +14,11 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.netty.http.client.HttpClient;
 
 import javax.net.ssl.SSLException;
+import java.lang.reflect.Method;
 import java.time.*;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Service
 public class MatchScheduleService {
@@ -54,7 +56,7 @@ public class MatchScheduleService {
     }
 
     // ===========================
-    // ✅ 네이버 month API 기반 크롤링
+    // 네이버 month API 기반 크롤링 (matches만)
     // ===========================
     /**
      * NAVER month API로 LCK 일정 크롤링 & 저장
@@ -67,7 +69,6 @@ public class MatchScheduleService {
         LocalDate e = LocalDate.parse(endDate);
         if (e.isBefore(s)) throw new IllegalArgumentException("endDate가 startDate보다 빠릅니다.");
 
-        // 네이버는 Referer 헤더 요구 가능 → 전용 클라이언트
         WebClient naverClient = this.defaultClient.mutate()
                 .defaultHeader("User-Agent", "Mozilla/5.0")
                 .defaultHeader("Referer", "https://sports.naver.com/esports/schedule/League_of_Legends")
@@ -87,8 +88,8 @@ public class MatchScheduleService {
     }
 
     /**
-     * 한 달치 불러와 저장
-     * 엔드포인트 예: https://esports-api.game.naver.com/service/v2/schedule/month?month=2025-08&topLeagueId=lck&relay=false
+     * 한 달치 불러와 저장 (content.matches 전용)
+     * 예: https://esports-api.game.naver.com/service/v2/schedule/month?month=2025-08&topLeagueId=lck&relay=false
      */
     private int fetchMonthAndSaveFromNaver(WebClient wc, YearMonth ym) throws Exception {
         String url = "https://esports-api.game.naver.com/service/v2/schedule/month"
@@ -101,98 +102,86 @@ public class MatchScheduleService {
         ObjectMapper om = new ObjectMapper();
         JsonNode root = om.readTree(json);
 
-        // 네이버 공통 래핑: { code, message, content: { teams, days } }
         JsonNode content = root.path("content");
         if (content.isMissingNode() || content.isNull()) {
             System.out.println("[NAVER WARN] content 없음");
             return 0;
         }
 
-        // 1) 팀 맵 구성 (teamId -> 이름/로고)
+        // 팀 맵 구성 (teamId -> 이름)
         Map<String, String> teamNameById = new HashMap<>();
-        Map<String, String> teamLogoById = new HashMap<>();
         for (JsonNode t : content.path("teams")) {
             String id = t.path("teamId").asText(null);
             if (id == null || id.isBlank()) continue;
             String name = firstNonBlank(t, "name", "nameEng", "nameAcronym", "teamName", "teamNameEng");
-            String logo = firstNonBlank(t, "imageUrl", "colorImageUrl", "whiteImageUrl", "blackImageUrl");
             if (name != null) teamNameById.put(id, name);
-            if (logo != null) teamLogoById.put(id, logo);
         }
 
-        // 2) days 배열
-        JsonNode days = content.path("days");
-        if (!days.isArray()) {
-            System.out.println("[NAVER WARN] days 배열 없음");
+        // 최신 응답: content.matches
+        JsonNode matchesTop = content.path("matches");
+        if (!matchesTop.isArray() || matchesTop.size() == 0) {
+            System.out.println("[NAVER WARN] matches 배열 없음");
             return 0;
         }
 
         int saved = 0, dup = 0, fail = 0;
-        int dIdx = 0;
-        for (JsonNode day : days) {
-            dIdx++;
-            String dateStr = firstNonBlank(day, "date", "gameDate", "matchDate"); // "yyyy-MM-dd"
-            if (dateStr == null) continue;
 
-            // day 안의 경기 리스트 키 탐색
-            JsonNode matches = firstArray(day, "matches", "events", "games", "list", "items");
-            if (matches == null) continue;
-
-            for (JsonNode m : matches) {
-                try {
-                    // 시간 / ISO
-                    String iso = firstNonBlank(m, "startTime", "startDateTime", "beginAt", "time", "matchTime");
-                    LocalDateTime when = parseKst(dateStr, iso);
-                    if (when == null) throw new IllegalArgumentException("시간 파싱 실패");
-
-                    // 팀
-                    String homeId = firstNonBlank(m, "homeTeamId", "homeId", "teamHomeId", "home");
-                    String awayId = firstNonBlank(m, "awayTeamId", "awayId", "teamAwayId", "away");
-
-                    String home = resolveTeam(teamNameById, homeId,
-                            firstNonBlank(m, "homeTeam", "homeName", "home"));
-                    String away = resolveTeam(teamNameById, awayId,
-                            firstNonBlank(m, "awayTeam", "awayName", "away"));
-
-                    if (home == null || away == null) throw new IllegalArgumentException("팀 파싱 실패");
-
-                    String league = firstNonBlank(m, "leagueName", "league", "tournamentName", "competitionName");
-                    String status = firstNonBlank(m, "status", "matchStatus", "state");
-
-                    // 중복 방지
-                    boolean exists = matchScheduleRepository
-                            .existsByTeamAIgnoreCaseAndTeamBIgnoreCaseAndMatchDate(home, away, when);
-                    if (exists) { dup++; continue; }
-
-                    MatchSchedule schedule = new MatchSchedule(
-                            "LOL",
-                            home,
-                            away,
-                            when,
-                            league,
-                            status
-                    );
-
-                    // (선택) 로고 보관 필드가 있으면 세팅
-                    try {
-                        var setTeamALogo = MatchSchedule.class.getMethod("setTeamALogo", String.class);
-                        var setTeamBLogo = MatchSchedule.class.getMethod("setTeamBLogo", String.class);
-                        setTeamALogo.invoke(schedule, teamLogoById.get(homeId));
-                        setTeamBLogo.invoke(schedule, teamLogoById.get(awayId));
-                    } catch (NoSuchMethodException ignore) {
-                        // 엔티티에 로고 필드 없으면 무시
-                    }
-
-                    matchScheduleRepository.save(schedule);
-                    saved++;
-                } catch (Exception ex) {
-                    fail++;
-                    System.err.println("[NAVER WARN] 저장 실패: " + ex.getMessage());
+        for (JsonNode m : matchesTop) {
+            try {
+                // 시간: startDate(epoch ms) 우선
+                LocalDateTime when = null;
+                long epochMs = m.path("startDate").asLong(0L);
+                if (epochMs > 0) {
+                    when = Instant.ofEpochMilli(epochMs)
+                            .atZone(ZoneId.of("Asia/Seoul"))
+                            .toLocalDateTime();
                 }
+                if (when == null) throw new IllegalArgumentException("시간 파싱 실패");
+
+                // 팀ID/이름 (중첩객체 보조)
+                String homeId = firstNonBlank(m, "homeTeamId", "homeId", "teamHomeId", "home");
+                String awayId = firstNonBlank(m, "awayTeamId", "awayId", "teamAwayId", "away");
+                if (homeId == null) homeId = m.path("homeTeam").path("teamId").asText(null);
+                if (awayId == null) awayId = m.path("awayTeam").path("teamId").asText(null);
+
+                String homeName = resolveTeam(teamNameById, homeId, null);
+                String awayName = resolveTeam(teamNameById, awayId, null);
+                if (homeName == null) homeName = firstNonBlank(m.path("homeTeam"), "name", "nameEng", "nameAcronym");
+                if (awayName == null) awayName = firstNonBlank(m.path("awayTeam"), "name", "nameEng", "nameAcronym");
+
+                if (homeName == null || awayName == null) throw new IllegalArgumentException("팀 파싱 실패");
+
+                String league = firstNonBlank(m, "leagueId", "topLeagueId", "leagueName", "league"); // e.g., lck_2025
+                String status = firstNonBlank(m, "matchStatus", "status", "state");                   // RESULT, SCHEDULED, ...
+                String gameCode = firstNonBlank(m, "gameCode");                                       // lol
+                String externalGameId = firstNonBlank(m, "gameId");                                   // 네이버 고유ID
+
+                // 중복 방지
+                boolean exists = matchScheduleRepository
+                        .existsByTeamAIgnoreCaseAndTeamBIgnoreCaseAndMatchDate(homeName, awayName, when);
+                if (exists) { dup++; continue; }
+
+                MatchSchedule schedule = new MatchSchedule(
+                        (gameCode != null ? gameCode.toUpperCase() : "LOL"),
+                        homeName,
+                        awayName,
+                        when,
+                        league,
+                        status
+                );
+
+                // 선택 필드: externalGameId (엔티티에 있으면 세팅)
+                safeInvoke(schedule, "setExternalGameId", externalGameId);
+
+                matchScheduleRepository.save(schedule);
+                saved++;
+            } catch (Exception ex) {
+                fail++;
+                System.err.println("[NAVER WARN] 저장 실패(matches): " + ex.getMessage());
             }
         }
 
-        System.out.printf("[NAVER %s] saved=%d dup=%d fail=%d%n", ym, saved, dup, fail);
+        System.out.printf("[NAVER %s matches] saved=%d dup=%d fail=%d%n", ym, saved, dup, fail);
         return saved;
     }
 
@@ -267,61 +256,20 @@ public class MatchScheduleService {
         return null;
     }
 
-    private static JsonNode firstArray(JsonNode node, String... keys) {
-        for (String k : keys) {
-            JsonNode arr = node.path(k);
-            if (arr.isArray()) return arr;
-        }
-        return null;
-    }
-
     private static String resolveTeam(Map<String, String> map, String idCandidate, String nameCandidate) {
         if (idCandidate != null && map.containsKey(idCandidate)) return map.get(idCandidate);
         return nameCandidate;
     }
 
-    /**
-     * KST로 LocalDateTime 파싱 (강화 버전)
-     * - 오프셋/타임존 포함 ISO(…+09:00, …Z) 우선 처리
-     * - 오프셋 없는 ISO(LocalDateTime) 처리
-     * - HH:mm / HH:mm:ss 만 오는 경우 date와 결합
-     */
-    private static LocalDateTime parseKst(String dateOrNull, String isoOrTime) {
-        if (isoOrTime == null || isoOrTime.isBlank()) return null;
-
-        String s = isoOrTime.trim().replace(" ", "T");
-
-        // 1) Offset 포함 (예: 2025-08-15T17:00:00+09:00, 2025-08-15T08:00:00Z)
+    /** 엔티티 선택 세터 안전 호출(없으면 무시) */
+    private static void safeInvoke(Object target, String setterName, Object arg) {
         try {
-            return OffsetDateTime.parse(s)
-                    .atZoneSameInstant(ZoneId.of("Asia/Seoul"))
-                    .toLocalDateTime();
-        } catch (Exception ignore) {}
-
-        // 2) Zone 포함 (예: 2025-08-15T17:00:00+09:00[Asia/Seoul])
-        try {
-            return ZonedDateTime.parse(s)
-                    .withZoneSameInstant(ZoneId.of("Asia/Seoul"))
-                    .toLocalDateTime();
-        } catch (Exception ignore) {}
-
-        // 3) 오프셋 없는 LocalDateTime (예: 2025-08-15T17:00, 2025-08-15T17:00:00)
-        try {
-            return LocalDateTime.parse(s).atZone(ZoneId.of("Asia/Seoul")).toLocalDateTime();
-        } catch (Exception ignore) {}
-
-        // 4) 시각만 온 경우 (예: 17:00, 17:00:00)
-        if (dateOrNull != null) {
-            try {
-                DateTimeFormatter f1 = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-                return LocalDateTime.parse(dateOrNull + " " + isoOrTime, f1);
-            } catch (Exception ignore) {}
-            try {
-                DateTimeFormatter f2 = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-                return LocalDateTime.parse(dateOrNull + " " + isoOrTime, f2);
-            } catch (Exception ignore) {}
+            if (arg == null) return;
+            Method m = target.getClass().getMethod(setterName, arg.getClass());
+            m.invoke(target, arg);
+        } catch (NoSuchMethodException ignore) {
+        } catch (Exception e) {
+            System.err.println("[WARN] " + setterName + " 세팅 실패: " + e.getMessage());
         }
-
-        return null; // 최종 실패
     }
 }

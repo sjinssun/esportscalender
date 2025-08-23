@@ -1,26 +1,72 @@
 package com.example.esportscalendar.domain;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import jakarta.persistence.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
-@Entity//데이터베이스 테이블과 1:1로 매핑되는 자바 클래스
+@Entity
+@Table(
+        name = "match_schedule",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "ux_match_teama_teamb_when", columnNames = {"team_a", "team_b", "match_date"})
+        },
+        indexes = {
+                @Index(name = "ix_match_date", columnList = "match_date"),
+                @Index(name = "ix_league_name", columnList = "league_name"),
+                @Index(name = "ix_teama", columnList = "team_a"),
+                @Index(name = "ix_teamb", columnList = "team_b")
+        }
+)
 public class MatchSchedule {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id") // pk
     private Long id;
-    private String gameName;
+
+    // 외부 식별자(네이버 gameId). 선택이지만 강력 추천.
+    @Column(name = "external_game_id", length = 64, unique = true)
+    private String externalGameId;
+
+    @Column(name = "game_name", nullable = false, length = 16)
+    private String gameName; // LOL, VAL 등
+
+    @Column(name = "team_a", nullable = false, length = 100)
     private String teamA;
+
+    @Column(name = "team_b", nullable = false, length = 100)
     private String teamB;
+
+    @Column(name = "match_date", nullable = false)
     private LocalDateTime matchDate;
 
-    private boolean notified = false; //알람여부
+    @Column(name = "notified", nullable = false)
+    private boolean notified = false;
 
-    private String matchStatus; // scheduled, live, finished
-    private String leagueName; // lck, worlds
+    @Column(name = "match_status", nullable = false, length = 40)
+    private String matchStatus; // RESULT, SCHEDULED, LIVE...
+
+    @Column(name = "league_name", nullable = false, length = 40)
+    private String leagueName; // lck_2025, lck 등
+
+    // 선택: 팀 로고
+    @Column(name = "team_a_logo", length = 512)
+    private String teamALogo;
+
+    @Column(name = "team_b_logo", length = 512)
+    private String teamBLogo;
+
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    protected MatchSchedule() { }
 
     public MatchSchedule(String gameName, String teamA, String teamB,
                          LocalDateTime matchDate, String leagueName, String matchStatus) {
@@ -31,73 +77,41 @@ public class MatchSchedule {
         this.leagueName = leagueName;
         this.matchStatus = matchStatus;
     }
-    // 입력된 값 사용되게 해줌 ex)) lol T1 vs gen 11 11 2025 , id는 자동생성이라 빼도댐
 
-    protected MatchSchedule(){
+    // --- getter/setter ---
 
-    }//JPA는 객체 생성시 new 사용하지않고 리플렉션이라는 기술로 생성. 따라서 protected로 외부에서는 사용하지 못하는 기본생성자 요구.
+    public Long getId() { return id; }
 
-    public Long getId() {
-        return id;
-    }
+    public String getExternalGameId() { return externalGameId; }
+    public void setExternalGameId(String externalGameId) { this.externalGameId = externalGameId; }
 
-    public void setId(Long id) {
-        this.id = id;
-    }
+    public String getGameName() { return gameName; }
+    public void setGameName(String gameName) { this.gameName = gameName; }
 
-    public String getGameName() {
-        return gameName;
-    }
+    public String getTeamA() { return teamA; }
+    public void setTeamA(String teamA) { this.teamA = teamA; }
 
-    public void setGameName(String getName) {
-        this.gameName = getName;
-    }
+    public String getTeamB() { return teamB; }
+    public void setTeamB(String teamB) { this.teamB = teamB; }
 
-    public String getTeamA() {
-        return teamA;
-    }
+    public LocalDateTime getMatchDate() { return matchDate; }
+    public void setMatchDate(LocalDateTime matchDate) { this.matchDate = matchDate; }
 
-    public void setTeamA(String teamA) {
-        this.teamA = teamA;
-    }
+    public String getMatchStatus() { return matchStatus; }
+    public void setMatchStatus(String matchStatus) { this.matchStatus = matchStatus; }
 
-    public String getTeamB() {
-        return teamB;
-    }
+    public boolean isNotified() { return notified; }
+    public void setNotified(boolean notified) { this.notified = notified; }
 
-    public void setTeamB(String teamB) {
-        this.teamB = teamB;
-    }
+    public String getLeagueName() { return leagueName; }
+    public void setLeagueName(String leagueName) { this.leagueName = leagueName; }
 
-    public LocalDateTime getMatchDate() {
-        return matchDate;
-    }
+    public String getTeamALogo() { return teamALogo; }
+    public void setTeamALogo(String teamALogo) { this.teamALogo = teamALogo; }
 
-    public void setMatchDate(LocalDateTime matchDate) {
-        this.matchDate = matchDate;
-    }
+    public String getTeamBLogo() { return teamBLogo; }
+    public void setTeamBLogo(String teamBLogo) { this.teamBLogo = teamBLogo; }
 
-    public String getMatchStatus() {
-        return matchStatus;
-    }
-
-    public void setMatchStatus(String matchStatus) {
-        this.matchStatus = matchStatus;
-    }
-
-    public boolean isNotified() {
-        return notified;
-    }
-
-    public void setNotified(boolean notified) {
-        this.notified = notified;
-    }
-
-    public String getLeagueName() {
-        return leagueName;
-    }
-
-    public void setLeagueName(String leagueName) {
-        this.leagueName = leagueName;
-    }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
 }
