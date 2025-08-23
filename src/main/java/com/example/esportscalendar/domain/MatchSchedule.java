@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 @Table(
         name = "match_schedule",
         uniqueConstraints = {
-                @UniqueConstraint(name = "ux_match_teama_teamb_when", columnNames = {"team_a", "team_b", "match_date"})
+                @UniqueConstraint(name = "ux_match_teamda_teamb_when", columnNames = {"teama", "teamb", "match_date"})
         },
         indexes = {
                 @Index(name = "ix_match_date", columnList = "match_date"),

@@ -89,7 +89,6 @@ public class MatchScheduleService {
 
     /**
      * 한 달치 불러와 저장 (content.matches 전용)
-     * 예: https://esports-api.game.naver.com/service/v2/schedule/month?month=2025-08&topLeagueId=lck&relay=false
      */
     private int fetchMonthAndSaveFromNaver(WebClient wc, YearMonth ym) throws Exception {
         String url = "https://esports-api.game.naver.com/service/v2/schedule/month"
