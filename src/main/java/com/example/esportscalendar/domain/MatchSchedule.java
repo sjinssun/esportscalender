@@ -15,8 +15,8 @@ import java.time.LocalDateTime;
         indexes = {
                 @Index(name = "ix_match_date", columnList = "match_date"),
                 @Index(name = "ix_league_name", columnList = "league_name"),
-                @Index(name = "ix_teama", columnList = "team_a"),
-                @Index(name = "ix_teamb", columnList = "team_b")
+                @Index(name = "ix_teama", columnList = "teama"),
+                @Index(name = "ix_teamb", columnList = "teamb")
         }
 )
 public class MatchSchedule {
@@ -33,10 +33,10 @@ public class MatchSchedule {
     @Column(name = "game_name", nullable = false, length = 16)
     private String gameName; // LOL, VAL 등
 
-    @Column(name = "team_a", nullable = false, length = 100)
+    @Column(name = "teama", nullable = false, length = 100)
     private String teamA;
 
-    @Column(name = "team_b", nullable = false, length = 100)
+    @Column(name = "teamb", nullable = false, length = 100)
     private String teamB;
 
     @Column(name = "match_date", nullable = false)
@@ -51,12 +51,6 @@ public class MatchSchedule {
     @Column(name = "league_name", nullable = false, length = 40)
     private String leagueName; // lck_2025, lck 등
 
-    // 선택: 팀 로고
-    @Column(name = "team_a_logo", length = 512)
-    private String teamALogo;
-
-    @Column(name = "team_b_logo", length = 512)
-    private String teamBLogo;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
@@ -105,12 +99,6 @@ public class MatchSchedule {
 
     public String getLeagueName() { return leagueName; }
     public void setLeagueName(String leagueName) { this.leagueName = leagueName; }
-
-    public String getTeamALogo() { return teamALogo; }
-    public void setTeamALogo(String teamALogo) { this.teamALogo = teamALogo; }
-
-    public String getTeamBLogo() { return teamBLogo; }
-    public void setTeamBLogo(String teamBLogo) { this.teamBLogo = teamBLogo; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
