@@ -23,3 +23,16 @@
 * **ORM:** Spring Data JPA
 * **Build Tool:** Gradle
 * **Communication:** WebClient (Naver API, Discord Webhook)
+
+## 📡 API 명세 (API Specification)
+
+| 구분 | Method | URI | 설명 |
+| :-- | :-- | :-- | :-- |
+| **User** | POST | `/api/users/signup` | 회원가입 (ID 유효성, 팀 선택 검증) |
+| | POST | `/api/users/login` | 로그인 |
+| **Schedule** | GET | `/api/schedules` | 전체 경기 일정 조회 |
+| | GET | `/api/schedules/upcoming` | 다가오는 경기 조회 (기본 5건) |
+| | GET | `/api/schedules/team/{teamName}` | 특정 팀 경기 조회 |
+| | POST | `/api/schedules/crawl` | (관리자용) 수동 크롤링 트리거 |
+| **Alarm** | POST | `/api/alerts/discord/subscribe` | 디스코드 알림 구독 (Webhook URL 등록) |
+| | POST | `/api/alerts/discord/test` | 웹훅 연동 테스트 |
